@@ -1,22 +1,24 @@
 // HSE 72 MHz internal clock
  
-#include <stm32f10x.h>
+#include "stm32f10x_conf.h"
  
 #define F_CPU           72000000   // 1MHz
 #define PRESCALE        64
 //#define PERIOD1         250 // microseconds - 1/2 second delay
-#define PERIOD2		 500 // microseconds - 1/4 second delay
+#define PERIOD2		 100 // microseconds - 1/4 second delay
 #define TCLKS1          ((F_CPU/PRESCALE*PERIOD2)/1000)
 
 #define SystemCoreClock PRESCALE * 1200
 
-#define PCLK1		72000000
+#define PCLK1		36000000
 //#define PERIOD1		10000 // 10ms
-#define PERIOD1		500
+#define PERIOD1		1000
 #define TCLKS2		((PCLK1/PRESCALE*PERIOD1)/1000)
  
 volatile uint8_t flag1 = 1;
 volatile uint8_t flag2 = 1;
+
+void TIM_Config(void);
 
 void TIM1_CC_IRQHandler(void)
 {
@@ -27,7 +29,7 @@ void TIM1_CC_IRQHandler(void)
     //else
     //  flag1 = 1;
 
-    TIM1->CCR1 += TCLKS1;        // next interrupt time
+    //TIM1->CCR1 += TCLKS1;        // next interrupt time
     TIM1->SR &= ~TIM_SR_CC1IF;   // clear CC1 int flag (write 0)
   }
   if (TIM1->SR & TIM_SR_CC2IF)  // CC1 match?
@@ -51,7 +53,7 @@ void TIM2_IRQHandler(void)
     else
       flag1 = 1;
     TIM2->SR &= ~TIM_SR_CC1IF;
-    TIM2->CCR1 += TCLKS2;
+    TIM2->CCR1 += TCLKS1;
   }
 }
 
@@ -83,8 +85,37 @@ void TIM4_IRQHandler(void)
 */
 
 void HSE_Configuration(void){
-  // HSE Clock Enable
-  RCC->CR |= RCC_CR_HSEON;
+  
+  // RCC system reset
+  RCC_DeInit();
+  
+  RCC_HSEConfig(RCC_HSE_ON);
+  
+  RCC_WaitForHSEStartUp();
+  
+  // HCLK = SYSCLK
+  RCC_HCLKConfig(RCC_SYSCLK_Div1);
+  
+  // PCLK2 = HCLK
+  RCC_PCLK2Config(RCC_HCLK_Div1);
+  
+  // PCLK1 = HCLK
+  //RCC_PCLK1Config(RCC_HCLK_Div1);
+  
+  // PLL selected as system clock
+  // RCC->CFGR &= ~RCC_CFGR_SW_0;
+  // RCC->CFGR |= RCC_CFGR_SW_1;
+  
+  // while(RCC_GetSYSCLKSource() != 0x04);
+  
+  // PREDIV1SCR
+  // PREDIV1
+  // PLLSCR
+  // PLLMUL
+  // SW
+  
+  RCC->CR |= RCC_CR_PLLON;// | RCC_CR_PLL2ON | RCC_CR_PLL3ON;
+  //RCC->CR &= ~RCC_CR_PLLON;
   
   // PLLXTPRE
   RCC->CFGR &= ~RCC_CFGR_PLLXTPRE;
@@ -99,9 +130,12 @@ void HSE_Configuration(void){
   // PLL selected as system clock
   RCC->CFGR &= ~RCC_CFGR_SW_0;
   RCC->CFGR |= RCC_CFGR_SW_1;
-
+  
+  RCC->CFGR &= ~(RCC_CFGR_HPRE_0 | RCC_CFGR_HPRE_1 | RCC_CFGR_HPRE_2 | RCC_CFGR_HPRE_3);
+    
+      // HSE Clock Enable
+  //RCC->CR = RCC_CR_HSEON;
 }
-
 
 void TIM1_Configuration(void)
 {
@@ -120,8 +154,8 @@ void TIM2_Configuration(void)
 {
   
   // APB1 Prescaler /2 - 100: HCLK divided by 2
-  RCC->CFGR &= ~(RCC_CFGR_PPRE1_0 | RCC_CFGR_PPRE1_1);
-  RCC->CFGR |= RCC_CFGR_PPRE1_2;
+  //RCC->CFGR &= ~(RCC_CFGR_PPRE1_0 | RCC_CFGR_PPRE1_1);
+  //RCC->CFGR |= RCC_CFGR_PPRE1_2;
 
   TIM2->PSC = PRESCALE - 1;
   TIM2->DIER |= TIM_DIER_CC1IE;// | TIM_DIER_CC2IE;		// enable 2 CC interrupt channels
@@ -170,13 +204,13 @@ void TIM4_Configuration(void)
 */
 
 void RCC_Configuration(void){
-  
+   
   // APB1 Prescaler /2 - 100: HCLK divided by 2
-  RCC->CFGR &= ~(RCC_CFGR_PPRE1_0 | RCC_CFGR_PPRE1_1);
-  RCC->CFGR |= RCC_CFGR_PPRE1_2;
+  //RCC->CFGR &= ~(RCC_CFGR_PPRE1_0 | RCC_CFGR_PPRE1_1);
+  //RCC->CFGR |= RCC_CFGR_PPRE1_2;
   
   // APB2 Prescaler HCLK not divided
-  RCC->CFGR &= ~(RCC_CFGR_PPRE2_0 | RCC_CFGR_PPRE2_1 | RCC_CFGR_PPRE1_2);
+  //RCC->CFGR |= (RCC_CFGR_PPRE2_0 | RCC_CFGR_PPRE2_1 | RCC_CFGR_PPRE1_2);
   
   //RCC->CFGR = 0;                       // HSI, 8 MHz, 
 
@@ -184,24 +218,65 @@ void RCC_Configuration(void){
   RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;	// enable PORTB
   RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;  // enable Timer1
   
-  RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN;  // enable Timer2
+  RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+  
+  //RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN;  // enable Timer2
 
   // Enable GPIO
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOB, ENABLE);
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2 | RCC_APB1Periph_TIM3 | RCC_APB1Periph_TIM4, ENABLE);
 }
 
+void Config(void)
+{
+  RCC_DeInit();
+  
+  RCC_HSEConfig(RCC_HSE_ON);
+  
+  ErrorStatus HSEStartUpStatus;
+  
+  HSEStartUpStatus = RCC_WaitForHSEStartUp();
+  
+  if (HSEStartUpStatus = SUCCESS)
+  {
+    //FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
+    
+    //FLASH_SetLatency(FLASH_Latency_2);
+    
+    RCC_HCLKConfig(RCC_SYSCLK_Div1);
+    
+    RCC_PCLK2Config(RCC_HCLK_Div1);
+    
+    RCC_PCLK1Config(RCC_HCLK_Div2);
+    
+    RCC_PLLConfig(RCC_PLLSource_HSE_Div2, RCC_PLLMul_5);
+    
+    RCC_PLLCmd(ENABLE);
+    
+    while(RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);
+    
+    RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
+    
+    while(RCC_GetSYSCLKSource() != 0x08);
+  }
+  else
+    for(;;);
 
+}
+  
 int main(void)
 {
- 
-  HSE_Configuration();
   
+  Config();
+  //HSE_Configuration();
+ 
   RCC_Configuration();
 
   //TIM_Config();
   TIM1_Configuration();
   TIM2_Configuration();
+  
+  //TIM_Config();
 
   GPIO_PinRemapConfig(GPIO_Remap_SWJ_NoJTRST , ENABLE);
 
@@ -242,17 +317,17 @@ int main(void)
                          RCC_APB1Periph_TIM4, ENABLE);
 
 
-  /* Clear timers and update pending flags *
+  // /* Clear timers and update pending flags *
   TIM_ClearFlag(TIM2, TIM_FLAG_Update);
   TIM_ClearFlag(TIM3, TIM_FLAG_Update);
   TIM_ClearFlag(TIM4, TIM_FLAG_Update);
 
-  /* Enable TIM2, TIM3 and TIM4 Update interrupts *
+  // /* Enable TIM2, TIM3 and TIM4 Update interrupts *
   TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
   TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
   TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
 
-  /* TIM2, TIM3 and TIM4 enable counters *
+  // /* TIM2, TIM3 and TIM4 enable counters *
   TIM_Cmd(TIM2, ENABLE);
   TIM_Cmd(TIM3, ENABLE);
   TIM_Cmd(TIM4, ENABLE);
@@ -333,17 +408,19 @@ void NVIC_Configuration(void)
 
 }
 
+*/
+
 void TIM_Config(void)
 { 
   TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
   TIM_OCInitTypeDef  TIM_OCInitStructure;
   NVIC_InitTypeDef  NVIC_InitStructure;
 
-  /* Enable TIM2, TIM3 and TIM4 clocks *
+  // /* Enable TIM2, TIM3 and TIM4 clocks *
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2 | RCC_APB1Periph_TIM3 |
                          RCC_APB1Periph_TIM4, ENABLE);
 
-  /* TIM2 configuration *
+  // /* TIM2 configuration *
   TIM_TimeBaseStructure.TIM_Period = 0x95F;
   //TIM_TimeBaseStructure.TIM_Prescaler = ((SystemCoreClock/1200) - 1);
   TIM_TimeBaseStructure.TIM_Prescaler = PRESCALE - 1;
@@ -352,63 +429,63 @@ void TIM_Config(void)
   TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
   TIM_OCStructInit(&TIM_OCInitStructure);
 
-  /* Output Compare Timing Mode configuration: Channel1 *
+  // /* Output Compare Timing Mode configuration: Channel1 *
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_Timing;
   TIM_OCInitStructure.TIM_Pulse = 0x0;
   TIM_OC1Init(TIM2, &TIM_OCInitStructure);
 
-  /* TIM3 configuration *
+  // /* TIM3 configuration *
   TIM_TimeBaseStructure.TIM_Period = 0x95F; 
   TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
 
-  /* Output Compare Timing Mode configuration: Channel1 *
+  // /* Output Compare Timing Mode configuration: Channel1 *
   TIM_OC1Init(TIM3, &TIM_OCInitStructure);
 
-  /* TIM4 configuration *
+  // /* TIM4 configuration *
   TIM_TimeBaseStructure.TIM_Period = 0xE0F;  
   TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
   
-  /* Output Compare Timing Mode configuration: Channel1 *
+  // /* Output Compare Timing Mode configuration: Channel1 *
   TIM_OC1Init(TIM4, &TIM_OCInitStructure);
 
-  /* Immediate load of TIM2,TIM3 and TIM4 Precaler values *
+  // /* Immediate load of TIM2,TIM3 and TIM4 Precaler values *
   TIM_PrescalerConfig(TIM2, ((SystemCoreClock/1200) - 1), TIM_PSCReloadMode_Immediate);
   TIM_PrescalerConfig(TIM3, ((SystemCoreClock/1200) - 1), TIM_PSCReloadMode_Immediate);
   TIM_PrescalerConfig(TIM4, ((SystemCoreClock/1200) - 1), TIM_PSCReloadMode_Immediate);
 
-  /* Clear TIM2, TIM3 and TIM4 update pending flags *
+  // /* Clear TIM2, TIM3 and TIM4 update pending flags *
   TIM_ClearFlag(TIM2, TIM_FLAG_Update);
   TIM_ClearFlag(TIM3, TIM_FLAG_Update);
   TIM_ClearFlag(TIM4, TIM_FLAG_Update);
 
-  /* Configure two bits for preemption priority *
+  // /* Configure two bits for preemption priority *
   NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
 
-  /* Enable the TIM2 Interrupt *
+  // /* Enable the TIM2 Interrupt *
   NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
-  /* Enable the TIM3 Interrupt *
+  // /* Enable the TIM3 Interrupt *
   NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
   NVIC_Init(&NVIC_InitStructure);
 
-  /* Enable the TIM4 Interrupt *
+  // /* Enable the TIM4 Interrupt *
   NVIC_InitStructure.NVIC_IRQChannel = TIM4_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
   NVIC_Init(&NVIC_InitStructure);
 
-  /* Enable TIM2, TIM3 and TIM4 Update interrupts *
+  // /* Enable TIM2, TIM3 and TIM4 Update interrupts *
   TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
   TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
   TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
 
-  /* TIM2, TIM3 and TIM4 enable counters *
-  //TIM_Cmd(TIM2, ENABLE);
+  // /* TIM2, TIM3 and TIM4 enable counters *
+  TIM_Cmd(TIM2, ENABLE);
   TIM_Cmd(TIM3, ENABLE);
   TIM_Cmd(TIM4, ENABLE);
 }
 
-*/
+// */
