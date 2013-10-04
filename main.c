@@ -35,6 +35,7 @@ void TIM1_CC_IRQHandler(void)
   }
   if (TIM1->SR & TIM_SR_CC2IF)  // CC1 match?
   {
+    /*
     if(flag2)
       flag2 = 0;
     else
@@ -42,6 +43,7 @@ void TIM1_CC_IRQHandler(void)
 
     TIM1->CCR2 += TCLKS1;        // next interrupt time
     TIM1->SR &= ~TIM_SR_CC2IF;   // clear CC1 int flag (write 0)
+    */
   }
 }
 
@@ -49,10 +51,12 @@ void TIM2_IRQHandler(void)
 {
   if (TIM2->SR & TIM_SR_CC1IF){
     detectEmergency();
+    /*
     if(flag1)
       flag1 = 0;
     else
       flag1 = 1;
+    */
     TIM2->SR &= ~TIM_SR_CC1IF;
     TIM2->CCR1 += TCLKS1;
   }
@@ -62,6 +66,12 @@ void TIM3_IRQHandler(void)
 {
   if (TIM3->SR & TIM_SR_CC1IF){
     refreshSensorData();
+    if(flag2)
+      flag2 = 0;
+    else
+      flag2 = 1;
+
+    //TIM3->CCR1 += TCLKS1;        // next interrupt time   
     TIM3->SR &= ~TIM_SR_CC1IF;
   }
 }
@@ -70,6 +80,11 @@ void TIM4_IRQHandler(void)
 {
   if (TIM4->SR & TIM_SR_CC1IF){
     calculateOrientation();
+    if(flag1)
+      flag1 = 0;
+    else
+      flag1 = 1;
+    
     TIM4->SR &= ~TIM_SR_CC1IF;
   }
 }
@@ -130,10 +145,11 @@ void HSE_Configuration(void){
 void TIM1_Configuration(void)
 {
   // TIM1
-  TIM1->PSC = PRESCALE - 1;
-  TIM1->DIER |= TIM_DIER_CC1IE | TIM_DIER_CC2IE;// | TIM_DIER_CC2IE;		// enable 2 CC interrupt channels
+  TIM1->PSC = 35;
+  TIM1->CR1 |= TIM_CR1_ARPE;
+  TIM1->ARR = 55535;
+  TIM1->DIER |= TIM_DIER_CC1IE;// | TIM_DIER_CC2IE;		// enable 2 CC interrupt channels
   TIM1->CCMR1 = 0;                     // chan 1 is output
-  TIM1->CCMR2 = 0;
   TIM1->CR1 = TIM_CR1_CEN;             // enable timer
  
   NVIC_SetPriority (TIM1_CC_IRQn, NVIC_IPR0_PRI_1);
@@ -147,7 +163,13 @@ void TIM2_Configuration(void)
   //RCC->CFGR &= ~(RCC_CFGR_PPRE1_0 | RCC_CFGR_PPRE1_1);
   //RCC->CFGR |= RCC_CFGR_PPRE1_2;
 
-  TIM2->PSC = PRESCALE - 1;
+  //TIM2->PSC = PRESCALE - 1;
+  //
+  // Auto-reload preload enabled
+  TIM2->PSC = 71;
+  TIM2->CR1 |= TIM_CR1_ARPE;
+  TIM2->ARR = 15535;
+  //
   TIM2->DIER |= TIM_DIER_CC1IE;// | TIM_DIER_CC2IE;		// enable 2 CC interrupt channels
   TIM2->CCMR1 = 0;                     // chan 1 is output
   TIM2->CR1 = TIM_CR1_CEN;             // enable timer
@@ -159,7 +181,10 @@ void TIM2_Configuration(void)
 void TIM3_Configuration(void)
 {
 
-  TIM3->PSC = PRESCALE - 1;
+  TIM3->PSC = 71;
+  TIM3->CR1 |= TIM_CR1_ARPE;
+  TIM3->ARR = 15535;
+  
   TIM3->DIER |= TIM_DIER_CC1IE;		// enable 2 CC interrupt channels
   TIM3->CCMR1 = 0;                     // chan 1 is output
   TIM3->CR1 = TIM_CR1_CEN;             // enable timer
@@ -170,7 +195,11 @@ void TIM3_Configuration(void)
 
 void TIM4_Configuration(void)
 {
-  TIM4->PSC = PRESCALE - 1;
+  
+  TIM4->PSC = 1023;
+  TIM4->CR1 |= TIM_CR1_ARPE;
+  TIM4->ARR = 30380;
+  
   TIM4->DIER |= TIM_DIER_CC1IE;		// enable 2 CC interrupt channels
   TIM4->CCMR1 = 0;                     // chan 1 is output
   TIM4->CR1 = TIM_CR1_CEN;             // enable timer
@@ -229,11 +258,11 @@ void Config(void)
     
     RCC_PLLCmd(DISABLE);
     
-    RCC_HCLKConfig(RCC_SYSCLK_Div1);
+    RCC_HCLKConfig(RCC_SYSCLK_Div2);
     
     RCC_PCLK2Config(RCC_HCLK_Div1);
     
-    RCC_PCLK1Config(RCC_HCLK_Div2);
+    RCC_PCLK1Config(RCC_HCLK_Div1);
     
     // DIV2
     RCC->CFGR |= RCC_CFGR_PLLXTPRE;  
@@ -269,7 +298,8 @@ int main(void)
   //TIM_Config();
   TIM1_Configuration();
   TIM2_Configuration();
-  
+  TIM3_Configuration();
+  TIM4_Configuration();
   //TIM_Config();
   
   // GPIO_PinRemapConfig(GPIO_Remap_SWJ_NoJTRST , ENABLE);
@@ -294,7 +324,7 @@ int main(void)
     else
       GPIOB->BSRR |= GPIO_BSRR_BS4;
     
-    //logDebugInfo();
+    logDebugInfo();
   }
 }
 
@@ -415,6 +445,7 @@ void TIM_Config(void)
                          RCC_APB1Periph_TIM4, ENABLE);
 
   // /* TIM2 configuration *
+  /*
   TIM_TimeBaseStructure.TIM_Period = 0x95F;
   TIM_TimeBaseStructure.TIM_Prescaler = ((SystemCoreClock/1200) - 1);
   //TIM_TimeBaseStructure.TIM_Prescaler = PRESCALE - 1;
@@ -428,6 +459,7 @@ void TIM_Config(void)
   //TIM_OCInitStructure.TIM_Pulse = 0x0;
   TIM_OC1Init(TIM2, &TIM_OCInitStructure);
 
+  */
   // /* TIM3 configuration *
   TIM_TimeBaseStructure.TIM_Period = 0x95F; 
   TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
