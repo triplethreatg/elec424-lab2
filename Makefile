@@ -1,7 +1,7 @@
 #This is the Makefile for Lab 1 Blinky for ELEC424 Fall 2013
 # Authors: Steven Arroyo and Lin Zhong, Rice University
 
-TARGET = main.c
+TARGET = main
 
 # use the arm compiler 
 CC = arm-none-eabi-gcc
@@ -22,7 +22,7 @@ CFLAGS = -O0 -g3 -mcpu=cortex-m3 -mthumb -I$(STM_STD_PERIF)/inc -I$(STM_STARTUP)
 
 # build all relevant files and create .elf
 all:
-	$(CC) $(CFLAGS) $(STM_STARTUP)/startup_stm32f10x_md.s $(TARGET).c $(STM_STD_PERIF)/src/misc.c $(STM_STD_PERIF)/src/stm32f10x_bkp.c $(STM_STD_PERIF)/src/stm32f10x_pwr.c $(STM_STD_PERIF)/src/stm32f10x_tim.c $(STM_STD_PERIF)/src/stm32f10x_gpio.c $(STM_STD_PERIF)/src/stm32f10x_rcc.c $(STM_STD_PERIF)/src/stm32f10x_rtc.c -o $(TARGET).elf
+	$(CC) $(CFLAGS) $(STM_STARTUP)/startup_stm32f10x_md.s $(TARGET).c liblab2.a $(STM_STD_PERIF)/src/misc.c $(STM_STD_PERIF)/src/stm32f10x_bkp.c $(STM_STD_PERIF)/src/stm32f10x_pwr.c $(STM_STD_PERIF)/src/stm32f10x_tim.c $(STM_STD_PERIF)/src/stm32f10x_gpio.c $(STM_STD_PERIF)/src/stm32f10x_rcc.c $(STM_STD_PERIF)/src/stm32f10x_rtc.c -o $(TARGET).elf
 
 clean:
 	rm -rf *o $(TARGET)

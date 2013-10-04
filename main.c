@@ -1,6 +1,7 @@
 // HSE 72 MHz internal clock
  
 #include "stm32f10x_conf.h"
+
  
 #define F_CPU           72000000   // 1MHz
 #define PRESCALE        64
@@ -8,7 +9,7 @@
 #define PERIOD2		 100 // microseconds - 1/4 second delay
 #define TCLKS1          ((F_CPU/PRESCALE*PERIOD2)/1000)
 
-#define SystemCoreClock PRESCALE * 1200
+#define SystemCoreClock 72000000
 
 #define PCLK1		36000000
 //#define PERIOD1		10000 // 10ms
@@ -59,30 +60,19 @@ void TIM2_IRQHandler(void)
 
 void TIM3_IRQHandler(void)
 {
-  if (TIM3->SR & TIM_SR_CC1IF)
+  if (TIM3->SR & TIM_SR_CC1IF){
     refreshSensorData();
+    TIM3->SR &= ~TIM_SR_CC1IF;
+  }
 }
 
 void TIM4_IRQHandler(void)
 {
-  if (TIM4->SR & TIM_SR_CC1IF)
+  if (TIM4->SR & TIM_SR_CC1IF){
     calculateOrientation();
-}
-
-/*void TIM8_CC_IRQHandler(void)
-{
-  if (TIM8->SR & TIM_SR_CC1IF)  // CC1 match?
-  {
-    //if(flag1)
-    //  flag1 = 0;
-    //else
-    //  flag1 = 1;
-
-    TIM8->CCR1 += TCLKS1;        // next interrupt time
-    TIM8->SR &= ~TIM_SR_CC1IF;   // clear CC1 int flag (write 0)
+    TIM4->SR &= ~TIM_SR_CC1IF;
   }
 }
-*/
 
 void HSE_Configuration(void){
   
@@ -189,20 +179,6 @@ void TIM4_Configuration(void)
   NVIC->ISER[0] |= (1 << TIM4_IRQn); // enable TIM2 int in NVIC
 }
 
-/*void TIM8_Configuration(void)
-{
-  // TIM1
-  TIM8->PSC = PRESCALE - 1;
-  TIM8->DIER |= TIM_DIER_CC1IE;// | TIM_DIER_CC2IE;		// enable 2 CC interrupt channels
-  TIM8->CCMR1 = 0;                     // chan 1 is output
-  TIM8->CCMR2 = 0;
-  TIM8->CR1 = TIM_CR1_CEN;             // enable timer
- 
-  NVIC_SetPriority (TIM8_CC_IRQn, NVIC_IPR1_PRI_5);
-  NVIC->ISER[1] |= (1 << TIM8_CC_IRQn); // enable TIM1 int in NVIC
-}
-*/
-
 void RCC_Configuration(void){
    
   // APB1 Prescaler /2 - 100: HCLK divided by 2
@@ -239,9 +215,19 @@ void Config(void)
   
   if (HSEStartUpStatus = SUCCESS)
   {
+    
+     /* Enable Prefetch Buffer */
+    //FLASH->ACR |= FLASH_ACR_PRFTBE;
+ 
+    /* Flash 2 wait state */
+    FLASH->ACR &= (uint32_t)((uint32_t)~FLASH_ACR_LATENCY);
+    FLASH->ACR |= (uint32_t)FLASH_ACR_LATENCY_2;
+ 
     //FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
     
     //FLASH_SetLatency(FLASH_Latency_2);
+    
+    RCC_PLLCmd(DISABLE);
     
     RCC_HCLKConfig(RCC_SYSCLK_Div1);
     
@@ -249,7 +235,14 @@ void Config(void)
     
     RCC_PCLK1Config(RCC_HCLK_Div2);
     
-    RCC_PLLConfig(RCC_PLLSource_HSE_Div2, RCC_PLLMul_5);
+    // DIV2
+    RCC->CFGR |= RCC_CFGR_PLLXTPRE;  
+    // 0111: PLL input clock x 9
+    
+    RCC_PLLConfig(RCC_PLLSource_HSE_Div2, RCC_PLLMul_9);
+    //RCC->CFGR &= ~(RCC_CFGR_PLLMULL_0 | RCC_CFGR_PLLMULL_2 | RCC_CFGR_PLLMULL_3 | RCC_CFGR_PLLMULL_3);
+    //RCC->CFGR |= (RCC_CFGR_PLLMULL_0 | RCC_CFGR_PLLMULL_1 | RCC_CFGR_PLLMULL_2);
+    
     
     RCC_PLLCmd(ENABLE);
     
@@ -266,19 +259,20 @@ void Config(void)
   
 int main(void)
 {
+  RCC_Configuration();
+  
+  GPIO_PinRemapConfig(GPIO_Remap_SWJ_NoJTRST , ENABLE);
   
   Config();
   //HSE_Configuration();
- 
-  RCC_Configuration();
 
   //TIM_Config();
   TIM1_Configuration();
   TIM2_Configuration();
   
   //TIM_Config();
-
-  GPIO_PinRemapConfig(GPIO_Remap_SWJ_NoJTRST , ENABLE);
+  
+  // GPIO_PinRemapConfig(GPIO_Remap_SWJ_NoJTRST , ENABLE);
 
   // * Configure PB5 *
   GPIO_InitTypeDef GPIO_InitStructure;
@@ -300,7 +294,7 @@ int main(void)
     else
       GPIOB->BSRR |= GPIO_BSRR_BS4;
     
-    logDebugInfo();
+    //logDebugInfo();
   }
 }
 
@@ -422,8 +416,8 @@ void TIM_Config(void)
 
   // /* TIM2 configuration *
   TIM_TimeBaseStructure.TIM_Period = 0x95F;
-  //TIM_TimeBaseStructure.TIM_Prescaler = ((SystemCoreClock/1200) - 1);
-  TIM_TimeBaseStructure.TIM_Prescaler = PRESCALE - 1;
+  TIM_TimeBaseStructure.TIM_Prescaler = ((SystemCoreClock/1200) - 1);
+  //TIM_TimeBaseStructure.TIM_Prescaler = PRESCALE - 1;
   TIM_TimeBaseStructure.TIM_ClockDivision = 0x0;    
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;  
   TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
@@ -431,7 +425,7 @@ void TIM_Config(void)
 
   // /* Output Compare Timing Mode configuration: Channel1 *
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_Timing;
-  TIM_OCInitStructure.TIM_Pulse = 0x0;
+  //TIM_OCInitStructure.TIM_Pulse = 0x0;
   TIM_OC1Init(TIM2, &TIM_OCInitStructure);
 
   // /* TIM3 configuration *
