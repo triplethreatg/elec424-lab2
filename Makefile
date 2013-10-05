@@ -17,12 +17,13 @@ STM_STARTUP = $(STM_LIB)/CMSIS/CM3/DeviceSupport/ST/STM32F10x/startup/gcc_ride7
 
 STM_CLOCK = $(LIB)/StdPeriph_Lib_V3.5.0/Project/STM32F10x_StdPeriph_Template
 
+
 # Define the compiler flags
 CFLAGS = -O0 -g3 -mcpu=cortex-m3 -mthumb -I$(STM_STD_PERIF)/inc -I$(STM_STARTUP) -I$(STM_CORE_SUPPORT) -I$(STM_DEVICE_SUPPORT) -I$(STM_CLOCK) -DSTM32F10X_MD -include stm32f10x_conf.h -Wl,--gc-sections -T stm32_flash.ld
 
 # build all relevant files and create .elf
 all:
-	$(CC) $(CFLAGS) $(STM_STARTUP)/startup_stm32f10x_md.s $(TARGET).c liblab2.a $(STM_STD_PERIF)/src/misc.c $(STM_STD_PERIF)/src/stm32f10x_bkp.c $(STM_STD_PERIF)/src/stm32f10x_pwr.c $(STM_STD_PERIF)/src/stm32f10x_tim.c $(STM_STD_PERIF)/src/stm32f10x_gpio.c $(STM_STD_PERIF)/src/stm32f10x_rcc.c $(STM_STD_PERIF)/src/stm32f10x_rtc.c -o $(TARGET).elf
+	$(CC) $(CFLAGS) $(STM_STARTUP)/startup_stm32f10x_md.s $(TARGET).c liblab2.a $(STM_STD_PERIF)/src/stm32f10x_gpio.c $(STM_STD_PERIF)/src/stm32f10x_rcc.c -o $(TARGET).elf
 
 clean:
 	rm -rf *o $(TARGET)
@@ -37,4 +38,4 @@ openocd:
 	openocd -d0 -f interface/busblaster.cfg -f target/stm32f1x.cfg -c init -c targets
 
 # Example output when V=1 is passed (make V=1)
-# arm-none-eabi-gcc -O0 -g3 -mcpu=cortex-m3 -mthumb -Ilib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/STM32F10x_StdPeriph_Driver/inc -Ilib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/startup/gcc_ride7 -Ilib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/CMSIS/CM3/CoreSupport -Ilib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x -DSTM32F10X_MD -include stm32f10x_conf.h -Wl,--gc-sections -T stm32_flash.ld lib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/startup/gcc_ride7/startup_stm32f10x_md.s blinky.c lib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_gpio.c lib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_rcc.c -o $(TARGET).elf 
+# arm-none-eabi-gcc -O0 -g3 -mcpu=cortex-m3 -mthumb -Ilib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/STM32F10x_StdPeriph_Driver/inc -Ilib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/startup/gcc_ride7 -Ilib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/CMSIS/CM3/CoreSupport -Ilib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x -DSTM32F10X_MD -include stm32f10x_conf.h -Wl,--gc-sections -T stm32_flash.ld lib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/startup/gcc_ride7/startup_stm32f10x_md.s $(TARGET).c lib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_gpio.c lib/STM32F10x_StdPeriph_Lib_V3.5.0/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_rcc.c -o $(TARGET).elf 
