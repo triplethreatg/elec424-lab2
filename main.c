@@ -2,6 +2,9 @@
  
 #include "stm32f10x_conf.h"
 
+uint8_t pidControl = 1;
+uint8_t count = 0;
+
 void TIM1_CC_IRQHandler(void)
 {
   if (TIM1->SR & TIM_SR_CC1IF)  // CC1 match?
@@ -9,13 +12,6 @@ void TIM1_CC_IRQHandler(void)
     detectEmergency();
     //TIM1->CCR1 += TCLKS1;        // next interrupt time
     TIM1->SR &= ~TIM_SR_CC1IF;   // clear CC1 int flag (write 0)
-  }
-  if (TIM1->SR & TIM_SR_CC2IF)  // CC1 match?
-  {
-    /*
-    TIM1->CCR2 += TCLKS1;        // next interrupt time
-    TIM1->SR &= ~TIM_SR_CC2IF;   // clear CC1 int flag (write 0)
-    */
   }
 }
 
@@ -42,7 +38,8 @@ void TIM3_IRQHandler(void)
 void TIM4_IRQHandler(void)
 {
   if (TIM4->SR & TIM_SR_CC1IF){
-    updatePid();
+    pidControl = updatePid();
+    //MotorTest();
     
     TIM4->SR &= ~TIM_SR_CC1IF;
   }
@@ -103,13 +100,83 @@ void TIM2_Configuration(void)
 void TIM3_Configuration(void)
 {
 
+  TIM3->CR1 = 0x00;
+  //TIM3->CR1 |= TIM_CR1_CMS_0;
+  //TIM3->CR1 &= ~TIM_CR1_CMS_1;
+  
   TIM3->PSC = 71;
   TIM3->CR1 |= TIM_CR1_ARPE;
-  TIM3->ARR = 15535;
+  //TIM3->ARR = 15530;
+  TIM3->ARR = 100;
   
-  TIM3->DIER |= TIM_DIER_CC1IE;		// enable 2 CC interrupt channels
-  TIM3->CCMR1 = 0;                     // chan 1 is output
+  // Value determined by CCRx register
+  
+  /*
+  The PWM mode can be selected independently on each channel (one PWM per OCx
+  output) by writing 110 (PWM mode 1) or ‘111 (PWM mode 2) in the OCxM bits in the
+  TIMx_CCMRx register. You must enable the corresponding preload register by setting the
+  OCxPE bit in the TIMx_CCMRx register, and eventually the auto-reload preload register (in
+  upcounting or center-aligned modes) by setting the ARPE bit in the TIMx_CR1 register.
+  */
+  TIM3->CCMR2 = 0;
+  TIM3->CCMR2 |= TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_2;
+  TIM3->CCMR2 |= TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_2;
+  
+  TIM3->CCMR2 |= TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE;
+  
+  //TIM3->CR1 |= TIM_CR1_ARPE;
+  
+  TIM3->CCR3 = 0;
+  //TIM3->CCR3 = 13107;
+  TIM3->CCR4 = 0;
+  
+  /*
+   * As the preload registers are transferred to the shadow registers only when an update event
+  occurs, before starting the counter, you have to initialize all the registers by setting the UG
+  bit in the TIMx_EGR register.
+  */
+  
+  TIM3->EGR |= TIM_EGR_UG;
+  
+  
+  
+  TIM3->BDTR |= TIM_BDTR_MOE;
+  
+  /*
+   * OCx polarity is software programmable using the CCxP bit in the TIMx_CCER register. It
+  can be programmed as active high or active low. OCx output is enabled by the CCxE bit in
+  the TIMx_CCER register. Refer to the TIMx_CCERx register description for more details.
+   */
+  TIM3->CCER &= ~(TIM_CCER_CC3P |TIM_CCER_CC4P);
+  //TIM3->CCER |= TIM_CCER_CC3P;
+  // TIM3->CCER &= ~TIM_CCER_CC4P;
+  TIM3->CCER |= TIM_CCER_CC3E | TIM_CCER_CC4E;
+  
+  /*
+   * OCx output is enabled by a combination of
+the CCxE, CCxNE, MOE, OSSI and OSSR bits (TIMx_CCER and TIMx_BDTR registers).
+Refer to the TIMx_CCER register description for more details.
+*/
+  
+  //TIM3->BDTR |= TIM_BDTR_MOE;
+  TIM3->BDTR |= TIM_BDTR_OSSI;
+  TIM3->BDTR |= TIM_BDTR_OSSR;
+  
+  
+  /*
+   * The timer is able to generate PWM in edge-aligned mode or center-aligned mode
+depending on the CMS bits in the TIMx_CR1 register.
+   */
+  
+  //TIM3->CR1 |= TIM_CR1_OPM;
+
+  
+  // TIM3->DIER |= TIM_DIER_CC1IE;		// enable 2 CC interrupt channels
+  //TIM3->CCMR1 = 0;                     // chan 1 is output
+  //TIM3->CR1 |= TIM_CR1_ARPE;
   TIM3->CR1 = TIM_CR1_CEN;             // enable timer
+  
+  TIM_CtrlPWMOutputs(TIM3, ENABLE);
 
   NVIC_SetPriority (TIM3_IRQn, NVIC_IPR0_PRI_3);
   NVIC->ISER[0] |= (1 << TIM3_IRQn); // enable TIM2 int in NVIC
@@ -121,10 +188,51 @@ void TIM4_Configuration(void)
   TIM4->PSC = 1023;
   TIM4->CR1 |= TIM_CR1_ARPE;
   TIM4->ARR = 30380;
+  //TIM4->ARR = 100;
   
   TIM4->DIER |= TIM_DIER_CC1IE;		// enable 2 CC interrupt channels
   TIM4->CCMR1 = 0;                     // chan 1 is output
+  
+  /****************************************************/
+
+  TIM4->CCMR2 = 0;
+  TIM4->CCMR2 |= TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_2;
+  TIM4->CCMR2 |= TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_2;
+  
+  TIM4->CCMR2 |= TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE;
+  
+  //TIM3->CR1 |= TIM_CR1_ARPE;
+  
+  TIM4->CCR3 = 0;
+  //TIM3->CCR3 = 13107;
+  TIM4->CCR4 = 0;
+  
+  /*
+   * As the preload registers are transferred to the shadow registers only when an update event
+  occurs, before starting the counter, you have to initialize all the registers by setting the UG
+  bit in the TIMx_EGR register.
+  */
+  
+  TIM4->EGR |= TIM_EGR_UG;
+  
+  TIM4->BDTR |= TIM_BDTR_MOE;
+  
+  /*
+   * OCx polarity is software programmable using the CCxP bit in the TIMx_CCER register. It
+  can be programmed as active high or active low. OCx output is enabled by the CCxE bit in
+  the TIMx_CCER register. Refer to the TIMx_CCERx register description for more details.
+   */
+  TIM4->CCER &= ~(TIM_CCER_CC3P |TIM_CCER_CC4P);
+  TIM4->CCER |= TIM_CCER_CC3E | TIM_CCER_CC4E;
+  
+  TIM4->BDTR |= TIM_BDTR_OSSI;
+  TIM4->BDTR |= TIM_BDTR_OSSR;
+  
+  /***************************************************/
+
   TIM4->CR1 = TIM_CR1_CEN;             // enable timer
+  
+  TIM_CtrlPWMOutputs(TIM4, ENABLE);
   
   NVIC_SetPriority (TIM4_IRQn, NVIC_IPR1_PRI_4);
   NVIC->ISER[0] |= (1 << TIM4_IRQn); // enable TIM2 int in NVIC
@@ -145,13 +253,24 @@ void RCC_Configuration(void){
   RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;	// enable PORTB
   RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;  // enable Timer1
   
-  RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-  
-  //RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN;  // enable Timer2
+  RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN;  // enable Timer2
 
   // Enable GPIO
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOB, ENABLE);
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2 | RCC_APB1Periph_TIM3 | RCC_APB1Periph_TIM4, ENABLE);
+}
+
+void PWM_Config(void)
+{
+  TIM3->CR1 = 0x0000;
+  TIM3->PSC = 0x00FF;
+  TIM3->ARR = 0x0FFF;
+  TIM3->CCMR2 = 0x068;
+  TIM3->CCER = 0x0101;
+  TIM3->DIER = 0x0000;
+  TIM3->EGR = 0x0001;
+  TIM3->CR1 = 0x0001;
+  TIM_CtrlPWMOutputs(TIM3, ENABLE);
 }
 
 void Config(void)
@@ -207,20 +326,92 @@ void Config(void)
     for(;;);
 
 }
+
+void MotorTest(void)
+{
   
+    while(count < 4)
+    {
+      while(!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG));
+      count++;
+    }
+    count = 0;
+    //TIM3->CCR3 = 1553;
+    TIM3->CCR3 = 10;
+    TIM3->CCR4 = 0;
+    TIM4->CCR3 = 0;
+    TIM4->CCR4 = 0;
+    
+    while(count < 4)
+    {
+      while(!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG));
+      count++;
+    }
+    count = 0;
+    TIM3->CCR3 = 0;
+    //TIM3->CCR4 = 1553;
+    TIM3->CCR4 = 10;
+    TIM4->CCR3 = 0;
+    TIM4->CCR4 = 0;
+    
+    while(count < 4)
+    {
+      while(!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG));
+      count++;
+    }
+    count = 0;
+    TIM3->CCR3 = 0;
+    TIM3->CCR4 = 0;
+    TIM4->CCR3 = 3038;
+    TIM4->CCR4 = 0;
+    
+    while(count < 4)
+    {
+      while(!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG));
+      count++;
+    }
+    count = 0;
+    TIM3->CCR3 = 0;
+    TIM3->CCR4 = 0;
+    TIM4->CCR3 = 0;
+    TIM4->CCR4 = 3038;
+  
+}
+  
+void MotorRun(void)
+{
+
+   if(pidControl)
+   {
+	TIM3->CCR3 = 1553;
+	TIM3->CCR4 = 1553;
+	TIM4->CCR3 = 3038;
+	TIM4->CCR4 = 3038;
+   }
+   else
+   {
+        TIM3->CCR3 = 0;
+        TIM3->CCR4 = 0;
+        TIM4->CCR3 = 0;
+        TIM4->CCR4 = 0;
+    }
+}
+
 int main(void)
 {
+  Config();
+  
   RCC_Configuration();
   
   GPIO_PinRemapConfig(GPIO_Remap_SWJ_NoJTRST , ENABLE);
   
-  Config();
+  // Config();
   SysTick_Configuration();
 
-  TIM1_Configuration();
-  TIM2_Configuration();
-  TIM3_Configuration();
-  TIM4_Configuration();
+  //TIM1_Configuration();
+  //TIM2_Configuration();
+  //TIM3_Configuration();
+  //TIM4_Configuration();
 
   // * Configure PB5 *
   GPIO_InitTypeDef GPIO_InitStructure;
@@ -228,17 +419,32 @@ int main(void)
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
   GPIO_Init(GPIOB, &GPIO_InitStructure);
+  
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_8 | GPIO_Pin_9;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+  GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
+  
+  TIM1_Configuration();
+  TIM2_Configuration();
+  TIM3_Configuration();
+  TIM4_Configuration();
+  //PWM_Config();
  
   while (1)
   {
-
+    while(1)
+    MotorTest();
+    
     while(!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG));
     GPIOB->BRR  |= GPIO_BRR_BR5;
 
     while(!(SysTick->CTRL & SysTick_CTRL_COUNTFLAG));
     GPIOB->BSRR |= GPIO_BSRR_BS5;      
     GPIOB->ODR ^= GPIO_ODR_ODR4;
-
+    
     logDebugInfo();
+    
   }
 }
